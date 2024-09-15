@@ -9,19 +9,25 @@ const cors = require('cors');
 
 
 //importing Server from  socket.io
-const {Server} = require('socket.io');
+const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
 
 //creating a new instance of socket.io
-const io = new Server(server,{
+const io = new Server(server, {
     cors: {
-        origin: 'http://localhost:5173',
-        methods: ['GET', 'POST' , 'PUT' , 'DELETE'],
+        origin: '*',
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
         credentials: true
     }
 })
+
+app.use(cors({
+    origin: 'http://localhost:5173',  // Replace with your frontend origin
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'], // Specify allowed methods
+    credentials: true                 // If you are using cookies or authentication
+}));
 
 // io refers to the whole server where as socket refers to the individual user
 // io will contain all the sockets of the users connected to the server
@@ -39,25 +45,64 @@ const io = new Server(server,{
 // 'leave' method is used to leave a user from a specific room
 
 
+//we can also use io middleware to authenticate the user before connecting to the server
 
-io.on('connection' , (socket)=>{
+// io.use((socket, next) => {
 
-    console.log("User details --> " , socket);
-    console.log('User connected' , socket.id);
+    //In this middleware we can check the user details and then allow the user to connect to the server
+    
+    // We can allow the user to connect to the server by calling the next() method
+    //next();
+
+    // If we don't want to allow the user to connect to the server then we can call the next() method with an error message
+    // next(new Error('User not allowed to connect to the server'));
+
+// })
+
+
+io.on('connection', (socket) => {
+
+    // console.log("User details --> ", socket);
+    console.log('User connected', socket.id);
 
     //now sending the welcome message to the user
 
     // socket.emit('event-name' , data) --> to send the data to the socket user and not to all the users
-    socket.emit('message' , 'Welcome to the chat app');
+    socket.emit('user-message', 'Welcome to the chat app');
 
     // socket.broadcast.emit('event-name' , data) --> to send the data to all the users except the user who sent the data 
+    socket.broadcast.emit('user-message', 'A new user has joined the chat' + socket.id);
 
     // io.emit('event-name' , data) --> to send the data to all the users
-    io.emit('message' , 'A new user has joined the chat' + socket.id);
+    // io.emit('welcome-message', 'A new user has joined the chat' + socket.id);
+    
+
+    socket.on('send-message' , (data)=>{
+        console.log(data);
+        if(data.to){
+
+            //both socket.to and io.to will send the data to the specific user
+            // io.to(data.to).emit('user-message', data.message);
+            socket.to(data.to).emit('chat-msg', data.message);
+        }
+        else{
+            io.emit('chat-msg' , data.message); //sending the data to all the users
+            //socket.broadcast.emit('user-message', data.message); //sending the data to all the users except the user who sent the data
+        }
+    })
+
+    socket.on('join-room', (room)=>{
+        socket.join(room);
+        console.log('User joined room', room);
+    })
+
+    socket.on("disconnect", () => {
+        console.log("User disconnected", socket.id);
+    });
 
 })
 
-app.get('/' , (req , res)=>{
+app.get('/', (req, res) => {
     res.send('Server is running and connected to the client');
 })
 
@@ -68,6 +113,6 @@ app.use(cors({
 }))
 
 
-server.listen(3000 , ()=>{
+server.listen(3000, () => {
     console.log('Server is running on port 3000');
 })
